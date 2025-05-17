@@ -1,0 +1,11 @@
+pdfplumber==0.11.4 
+pandas 
+numpy 
+dask 
+requests 
+openpyxl 
+pytest 
+flask 
+flask-cors 
+pyjwt 
+werkzeug
