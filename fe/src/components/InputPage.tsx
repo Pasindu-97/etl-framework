@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import axios from 'axios';
+
+
 
 interface ColumnPair {
   relatedColumn: string;
@@ -97,9 +100,49 @@ const InputPage: React.FC = () => {
   };
 
   // Handle proceeding to show download button
-  const handleProceed = () => {
-    if (dataEntries.length > 0) {
-      setIsProceeded(true);
+  const handleProceed = async () => {
+    if (dataEntries.length === 0) return;
+  
+    const sources: { url: string; related_columns: string[]; column_names: string[] }[] = [];
+  
+    dataEntries.forEach(entry => {
+      entry.urls.forEach(url => {
+        const related_columns = entry.columnPairs.map(p => p.relatedColumn);
+        const column_names = entry.columnPairs.map(p => p.outputColumn);
+        sources.push({ url, related_columns, column_names });
+      });
+    });
+  
+    const payload = {
+      output_columns: outputColumns,
+      sources: sources
+    };
+    console.log('Payload:', payload);
+  
+    try {
+      const response = await axios.post(
+        'http://localhost:5050/etl-process', // Use correct port
+        payload,
+        { responseType: 'blob' } // because it returns Excel
+      );
+  
+      // Trigger file download
+      const blob = new Blob([response.data as BlobPart], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'etl_output.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+  
+      setIsProceeded(true); // show success/download UI
+    } catch (err) {
+      console.error('ETL request failed:', err);
+      alert('Failed to process ETL request. Please check console or input.');
     }
   };
 
@@ -132,6 +175,7 @@ const InputPage: React.FC = () => {
     URL.revokeObjectURL(link.href);
   };
 
+  
   return (
     <div className="min-h-screen w-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="w-full max-w-4xl bg-white shadow-lg rounded-lg p-8">

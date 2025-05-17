@@ -34,6 +34,10 @@ def etl_process():
         return handle_etl_request(output_columns, sources)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@app.route('/etl', methods=['POST'])
+def etl_processw():
+    return jsonify({"error": "str(e)"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5050)
