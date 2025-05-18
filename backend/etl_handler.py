@@ -1,9 +1,10 @@
 # etl_handler.py
 import pandas as pd
 from io import BytesIO
-from flask import send_file
+from flask import send_file, jsonify
 from extractor import Extractor
 from transformer import Transformer
+import logging
 
 extractor = Extractor()
 transformer = Transformer()
@@ -17,25 +18,44 @@ def handle_etl_request(output_columns, sources):
         column_names = source.get("column_names", [])
 
         df = extractor.fetch_data(url)
-        if df is None:
+        if df is None or df.empty:
+            logging.warning(f"Skipped empty or failed fetch for {url}")
             continue
 
-        # Rename columns
-        df = df[related_columns]
-        df.columns = column_names
+        try:
+            # Subset and rename columns
+            df = df[related_columns]
+            df.columns = column_names
 
-        # Transform
-        df = transformer.clean_normalize_standardize(df)
+            df = transformer.clean_normalize_standardize(df)
 
-        # Align to output schema
-        aligned = {col: df[col] if col in df else None for col in output_columns}
-        aligned_df = pd.DataFrame(aligned)
+            aligned = {col: df[col] if col in df else pd.Series(["N/A"] * len(df)) for col in output_columns}
+            aligned_df = pd.DataFrame(aligned)
 
-        final_df = pd.concat([final_df, aligned_df], ignore_index=True)
+            # Skip if nothing usable in aligned_df
+            if aligned_df.empty or aligned_df.dropna(how='all').empty:
+                logging.warning(f"Skipping aligned data from {url} — empty after alignment.")
+                continue
 
-    # Write to Excel in memory
+            final_df = pd.concat([final_df, aligned_df], ignore_index=True)
+        except Exception as e:
+            logging.error(f"Error processing {url}: {e}")
+            continue
+
+    # Final check before output
+    if final_df.empty or final_df.dropna(how='all').empty:
+        logging.error("Final output is empty after processing all sources.")
+        return jsonify({"error": "No valid data to export."}), 400
+
+    final_df.fillna("N/A", inplace=True)
+
     output = BytesIO()
     final_df.to_excel(output, index=False)
     output.seek(0)
 
-    return send_file(output, as_attachment=True, download_name="etl_output.xlsx", mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name="etl_output.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )

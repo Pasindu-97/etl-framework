@@ -1,7 +1,7 @@
 # auth.py
 users = {
-    "admin": "password123",
-    "user1": "mypassword"
+    "admin": "test",
+    "user1": "123"
 }
 
 def authenticate(username, password):
